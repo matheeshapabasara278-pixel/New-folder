@@ -38,27 +38,67 @@
     <style>
         body {
             font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+        
+        /* Dark Theme Styles */
+        html.dark body {
             background-color: #0B0F17;
             color: #E5E7EB;
         }
+        html.dark .glass-card {
+            background: rgba(19, 23, 34, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(42, 46, 57, 0.8);
+        }
+        html.dark .table-head-bg {
+            background-color: rgba(19, 23, 34, 0.5);
+        }
+
+        /* Light Theme Styles */
+        html:not(.dark) body {
+            background-color: #F3F4F6;
+            color: #1F2937;
+        }
+        html:not(.dark) .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(229, 231, 235, 1);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05);
+        }
+        html:not(.dark) .text-white {
+            color: #111827 !important;
+        }
+        html:not(.dark) .text-gray-200, html:not(.dark) .text-gray-300 {
+            color: #374151 !important;
+        }
+        html:not(.dark) .text-gray-400 {
+            color: #6B7280 !important;
+        }
+        html:not(.dark) .bg-cardDark {
+            background-color: #FFFFFF !important;
+        }
+        html:not(.dark) .border-borderDark {
+            border-color: #E5E7EB !important;
+        }
+        html:not(.dark) .hover\:bg-cardHover:hover {
+            background-color: #F9FAFB !important;
+        }
+        html:not(.dark) .table-head-bg {
+            background-color: #F9FAFB;
+        }
+
+        /* Scrollbar */
         ::-webkit-scrollbar {
             width: 6px;
             height: 6px;
         }
         ::-webkit-scrollbar-track {
-            background: #0B0F17;
+            background: transparent;
         }
         ::-webkit-scrollbar-thumb {
             background: #2A2E39;
             border-radius: 4px;
-        }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #3B82F6;
-        }
-        .glass-card {
-            background: rgba(19, 23, 34, 0.75);
-            backdrop-filter: blur(12px);
-            border: 1px solid rgba(42, 46, 57, 0.8);
         }
         .glow-green {
             box-shadow: 0 0 15px rgba(16, 185, 129, 0.15);
@@ -87,6 +127,11 @@
         </div>
 
         <div class="flex items-center space-x-3">
+            <!-- Theme Toggle Button -->
+            <button id="themeToggleBtn" onclick="toggleTheme()" class="p-2.5 rounded-lg bg-cardDark hover:bg-cardHover border border-borderDark text-gray-300 hover:text-white transition flex items-center justify-center text-sm" title="Toggle Light/Dark Mode">
+                <i class="fa-solid fa-sun text-amber-400" id="themeIcon"></i>
+            </button>
+
             <!-- Sync Status Indicator -->
             <div class="hidden sm:flex items-center space-x-2 px-3 py-1.5 rounded-lg bg-cardDark border border-borderDark text-xs">
                 <span class="relative flex h-2 w-2">
@@ -137,7 +182,7 @@
                     <span id="kpiWinLossRatio" class="text-xs text-gray-400">0W / 0L</span>
                 </div>
                 <!-- Progress bar -->
-                <div class="w-full bg-gray-800 h-2 rounded-full mt-3 overflow-hidden">
+                <div class="w-full bg-gray-200 dark:bg-gray-800 h-2 rounded-full mt-3 overflow-hidden">
                     <div id="kpiWinProgressBar" class="bg-blueAccent h-full rounded-full transition-all duration-500" style="width: 0%"></div>
                 </div>
             </div>
@@ -277,7 +322,7 @@
             <div class="overflow-x-auto">
                 <table class="w-full text-left border-collapse">
                     <thead>
-                        <tr class="border-b border-borderDark text-xs font-semibold text-gray-400 uppercase tracking-wider bg-cardDark/50">
+                        <tr class="border-b border-borderDark text-xs font-semibold text-gray-400 uppercase tracking-wider table-head-bg">
                             <th class="py-3 px-4">Date</th>
                             <th class="py-3 px-4">Pair</th>
                             <th class="py-3 px-4">Session</th>
@@ -311,6 +356,33 @@
         let equityChartInstance = null;
         let donutChartInstance = null;
         let sessionChartInstance = null;
+
+        // Theme Toggle Functionality
+        function toggleTheme() {
+            const html = document.documentElement;
+            const icon = document.getElementById('themeIcon');
+            
+            if (html.classList.contains('dark')) {
+                html.classList.remove('dark');
+                icon.className = "fa-solid fa-moon text-indigo-600";
+                localStorage.setItem('theme', 'light');
+            } else {
+                html.classList.add('dark');
+                icon.className = "fa-solid fa-sun text-amber-400";
+                localStorage.setItem('theme', 'dark');
+            }
+            renderCharts(); // Re-render charts for grid line contrast
+        }
+
+        // Apply Saved Theme Preference
+        (function initTheme() {
+            const savedTheme = localStorage.getItem('theme');
+            const icon = document.getElementById('themeIcon');
+            if (savedTheme === 'light') {
+                document.documentElement.classList.remove('dark');
+                if (icon) icon.className = "fa-solid fa-moon text-indigo-600";
+            }
+        })();
 
         // Fetch Live Data from Netlify Serverless Function
         async function fetchNotionData() {
@@ -352,17 +424,17 @@
             setTimeout(() => icon.classList.remove('fa-spin'), 600);
         }
 
-        // Parse Notion Properties into Clean Trade Objects (Smart Pair & Direction Extractor)
+        // Parse Notion Properties into Clean Trade Objects
         function parseNotionData(results) {
             trades = results.map((item, index) => {
                 const props = item.properties;
 
                 const date = props['DATE']?.date?.start || props['Date']?.date?.start || 'N/A';
                 
-                // Notion 'PAIR & DIRECTION' column parsing logic
+                // Notion 'PAIR & DIRECTION' column parsing
                 const pairDirectionTag = props['PAIR & DIRECTION']?.select?.name || props['PAIR / ASSET']?.select?.name || props['Pair']?.select?.name || 'GBP/USD - BUY';
                 
-                // Extract Pair (e.g., 'GBP/USD')
+                // Extract Pair
                 const pair = pairDirectionTag.includes('-') ? pairDirectionTag.split('-')[0].trim() : pairDirectionTag;
 
                 // Extract Direction (BUY -> LONG, SELL -> SHORT)
@@ -380,7 +452,7 @@
                 const pnl = props['PROFIT/LOSS AMOUNT']?.number || props['PnL']?.number || 0;
                 const outcome = props['OUTCOME']?.select?.name || props['Outcome']?.select?.name || (pnl >= 0 ? 'Win' : 'Loss');
 
-                // Normalize Session string to handle typos like 'LN SILVER BULER'
+                // Normalize Session string
                 let normalizedSession = rawSession;
                 const upperS = rawSession.toUpperCase();
                 if (upperS.includes('LN') || upperS.includes('LONDON')) {
@@ -443,8 +515,12 @@
             document.getElementById('donutLosses').innerText = losses;
         }
 
-        // Render Visual Charts
+        // Render Visual Charts with Theme Adaptation
         function renderCharts() {
+            const isDark = document.documentElement.classList.contains('dark');
+            const gridColor = isDark ? '#1E222D' : '#E5E7EB';
+            const textColor = isDark ? '#9CA3AF' : '#4B5563';
+
             let cumulativePnL = 0;
             const equityLabels = ['Start'];
             const equityData = [0];
@@ -482,8 +558,8 @@
                     maintainAspectRatio: false,
                     plugins: { legend: { display: false } },
                     scales: {
-                        x: { grid: { color: '#1E222D' }, ticks: { color: '#9CA3AF' } },
-                        y: { grid: { color: '#1E222D' }, ticks: { color: '#9CA3AF' } }
+                        x: { grid: { color: gridColor }, ticks: { color: textColor } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
                     }
                 }
             });
@@ -531,10 +607,10 @@
                 options: {
                     responsive: true,
                     maintainAspectRatio: false,
-                    plugins: { legend: { labels: { color: '#9CA3AF' } } },
+                    plugins: { legend: { labels: { color: textColor } } },
                     scales: {
-                        x: { grid: { display: false }, ticks: { color: '#9CA3AF' } },
-                        y: { grid: { color: '#1E222D' }, ticks: { color: '#9CA3AF' } }
+                        x: { grid: { display: false }, ticks: { color: textColor } },
+                        y: { grid: { color: gridColor }, ticks: { color: textColor } }
                     }
                 }
             });
@@ -562,11 +638,11 @@
                 const tagClass = isWin ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20' : 'bg-rose-500/10 text-rose-400 border-rose-500/20';
 
                 row.innerHTML = `
-                    <td class="py-3.5 px-4 font-medium text-gray-200">${trade.date}</td>
+                    <td class="py-3.5 px-4 font-medium">${trade.date}</td>
                     <td class="py-3.5 px-4 font-bold text-white">${trade.pair}</td>
-                    <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-cardDark border border-borderDark text-[11px] text-gray-300">${trade.session}</span></td>
-                    <td class="py-3.5 px-4 text-gray-300">${trade.setup}</td>
-                    <td class="py-3.5 px-4 font-semibold ${trade.direction === 'LONG' ? 'text-blue-400' : 'text-purple-400'}">${trade.direction}</td>
+                    <td class="py-3.5 px-4"><span class="px-2 py-0.5 rounded bg-cardDark border border-borderDark text-[11px]">${trade.session}</span></td>
+                    <td class="py-3.5 px-4">${trade.setup}</td>
+                    <td class="py-3.5 px-4 font-semibold ${trade.direction === 'LONG' ? 'text-blue-500' : 'text-purple-500'}">${trade.direction}</td>
                     <td class="py-3.5 px-4 text-gray-400">${trade.rr}</td>
                     <td class="py-3.5 px-4 ${pnlClass}">${isWin ? '+' : ''}$${trade.pnl}</td>
                     <td class="py-3.5 px-4 text-center">
