@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>MintPip | Ultimate ICT Silver Bullet Dashboard</title>
+    <title>MintPip | ICT Silver Bullet Dashboard</title>
     <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
@@ -371,6 +371,23 @@
                     </tbody>
                 </table>
             </div>
+
+            <!-- Pagination Bar (15 items per page) -->
+            <div id="paginationContainer" class="flex flex-col sm:flex-row items-center justify-between gap-4 mt-6 pt-4 border-t border-borderDark text-xs text-gray-400">
+                <div id="paginationInfo">
+                    Showing <span id="showingStart" class="font-bold text-white">0</span> to <span id="showingEnd" class="font-bold text-white">0</span> of <span id="totalItems" class="font-bold text-white">0</span> trades
+                </div>
+                <div class="flex items-center space-x-2">
+                    <button id="prevBtn" onclick="changePage(-1)" class="px-3 py-1.5 rounded-lg bg-cardDark hover:bg-cardHover border border-borderDark text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 font-medium">
+                        <i class="fa-solid fa-chevron-left text-[10px]"></i> Prev
+                    </button>
+                    <span id="pageNumbers" class="px-2 font-semibold text-gray-300">Page 1 of 1</span>
+                    <button id="nextBtn" onclick="changePage(1)" class="px-3 py-1.5 rounded-lg bg-cardDark hover:bg-cardHover border border-borderDark text-gray-300 disabled:opacity-40 disabled:cursor-not-allowed transition flex items-center gap-1 font-medium">
+                        Next <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                    </button>
+                </div>
+            </div>
+
             <div id="noDataMessage" class="hidden text-center py-8 text-gray-400 text-xs">
                 No trades found in Notion database matching selection.
             </div>
@@ -423,6 +440,10 @@
     <!-- Application Logic & Scripts -->
     <script>
         let trades = [];
+        let filteredTradesList = [];
+        let currentPage = 1;
+        const rowsPerPage = 15;
+
         let equityChartInstance = null;
         let donutChartInstance = null;
         let sessionChartInstance = null;
@@ -464,14 +485,13 @@
             const slPips = parseFloat(document.getElementById('calcSLPips').value) || 1;
             
             const riskAmt = bal * (riskPct / 100);
-            // Standard lot calculation for forex (approx $10 per pip per standard lot, so riskAmt / (slPips * 10))
             const lotSize = riskAmt / (slPips * 10);
 
             document.getElementById('resRiskAmount').innerText = `$${riskAmt.toFixed(2)}`;
             document.getElementById('resLotSize').innerText = `${lotSize.toFixed(2)} Standard Lots`;
         }
 
-        // Live Killzone & Clock Status
+        // Live Killzone Status Indicator
         setInterval(() => {
             const now = new Date();
             const utcHours = now.getUTCHours();
@@ -481,12 +501,10 @@
             let status = "Market Open (Outside Killzone)";
             let color = "text-gray-400";
 
-            // London Silver Bullet: 07:00 - 10:00 UTC
             if (timeNum >= 7 && timeNum < 10) {
                 status = "🔥 London Silver Bullet Active";
                 color = "text-emeraldAccent font-bold";
             } 
-            // New York Silver Bullet: 14:00 - 17:00 UTC
             else if (timeNum >= 14 && timeNum < 17) {
                 status = "🔥 New York Silver Bullet Active";
                 color = "text-emeraldAccent font-bold";
@@ -546,7 +564,6 @@
 
                 const dateStr = props['DATE']?.date?.start || props['Date']?.date?.start || 'N/A';
                 
-                // Get Day of the Week from date
                 let dayOfWeek = 'N/A';
                 if (dateStr !== 'N/A') {
                     const d = new Date(dateStr);
@@ -594,9 +611,11 @@
                 };
             });
 
+            filteredTradesList = [...trades];
             calculateKPIs();
             renderCharts();
-            renderTable(trades);
+            currentPage = 1;
+            renderPaginatedTable();
         }
 
         // Calculate KPI Metrics & Max Drawdown
@@ -717,7 +736,6 @@
                 }
             });
 
-            // Session Chart
             if (sessionChartInstance) sessionChartInstance.destroy();
             const ctxSession = document.getElementById('sessionChart').getContext('2d');
             const londonWins = trades.filter(t => t.session.includes('London') && t.result === 'Win').length;
@@ -745,7 +763,6 @@
                 }
             });
 
-            // Day of Week PnL Chart
             if (dayOfWeekChartInstance) dayOfWeekChartInstance.destroy();
             const ctxDay = document.getElementById('dayOfWeekChart').getContext('2d');
             const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri'];
@@ -776,20 +793,35 @@
             });
         }
 
-        // Render Table Rows
-        function renderTable(data) {
+        // Render Paginated Table (15 rows per page)
+        function renderPaginatedTable() {
             const tableBody = document.getElementById('tradeTableBody');
             const noData = document.getElementById('noDataMessage');
+            const paginationContainer = document.getElementById('paginationContainer');
+            
             tableBody.innerHTML = '';
 
-            if (data.length === 0) {
+            const totalItems = filteredTradesList.length;
+
+            if (totalItems === 0) {
                 noData.classList.remove('hidden');
+                paginationContainer.classList.add('hidden');
                 return;
             } else {
                 noData.classList.add('hidden');
+                paginationContainer.classList.remove('hidden');
             }
 
-            data.forEach(trade => {
+            const totalPages = Math.ceil(totalItems / rowsPerPage);
+            if (currentPage > totalPages) currentPage = totalPages;
+            if (currentPage < 1) currentPage = 1;
+
+            const startIndex = (currentPage - 1) * rowsPerPage;
+            const endIndex = Math.min(startIndex + rowsPerPage, totalItems);
+
+            const pageItems = filteredTradesList.slice(startIndex, endIndex);
+
+            pageItems.forEach(trade => {
                 const row = document.createElement('tr');
                 row.className = 'hover:bg-cardHover/70 transition duration-150';
 
@@ -811,6 +843,21 @@
                 `;
                 tableBody.appendChild(row);
             });
+
+            // Update Pagination UI Indicators
+            document.getElementById('showingStart').innerText = startIndex + 1;
+            document.getElementById('showingEnd').innerText = endIndex;
+            document.getElementById('totalItems').innerText = totalItems;
+            document.getElementById('pageNumbers').innerText = `Page ${currentPage} of ${totalPages}`;
+
+            document.getElementById('prevBtn').disabled = currentPage === 1;
+            document.getElementById('nextBtn').disabled = currentPage === totalPages;
+        }
+
+        // Change Pagination Page
+        function changePage(direction) {
+            currentPage += direction;
+            renderPaginatedTable();
         }
 
         // Filter Functionality
@@ -819,7 +866,7 @@
             const sessionVal = document.getElementById('sessionFilter').value;
             const resultVal = document.getElementById('resultFilter').value;
 
-            const filtered = trades.filter(t => {
+            filteredTradesList = trades.filter(t => {
                 const matchesSearch = t.pair.toLowerCase().includes(searchVal) || t.setup.toLowerCase().includes(searchVal);
                 
                 let matchesSession = true;
@@ -836,13 +883,14 @@
                 return matchesSearch && matchesSession && matchesResult;
             });
 
-            renderTable(filtered);
+            currentPage = 1;
+            renderPaginatedTable();
         }
 
         // Export Filtered Trades to CSV
         function exportToCSV() {
             let csvContent = "data:text/csv;charset=utf-8,Date,Day,Pair,Session,Setup,Direction,RR,PnL,Result\n";
-            trades.forEach(t => {
+            filteredTradesList.forEach(t => {
                 csvContent += `"${t.date}","${t.day}","${t.pair}","${t.session}","${t.setup}","${t.direction}","${t.rr}","${t.pnl}","${t.result}"\n`;
             });
             const encodedUri = encodeURI(csvContent);
