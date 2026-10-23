@@ -1,10 +1,7 @@
 exports.handler = async function (event, context) {
   const NOTION_KEY = process.env.NOTION_API_KEY || process.env.NOTION_KEY;
 
-  // Query parameter එකෙන් type එක ගන්නවා (backtest හෝ live)
   const dataType = event.queryStringParameters?.type || 'backtest';
-
-  // Environment variables වලින් අදාළ Database ID එක තෝරා ගැනීම
   const DATABASE_ID = dataType === 'live'
     ? process.env.NOTION_LIVE_DATABASE_ID
     : process.env.NOTION_BACKTEST_DATABASE_ID;
@@ -12,7 +9,7 @@ exports.handler = async function (event, context) {
   if (!NOTION_KEY || !DATABASE_ID) {
     return {
       statusCode: 500,
-      body: JSON.stringify({ error: `Missing Netlify Environment Variables for ${dataType}` }),
+      body: JSON.stringify({ error: `Missing Netlify Env Vars for ${dataType}. Key: ${!!NOTION_KEY}, ID: ${!!DATABASE_ID}` }),
     };
   }
 
@@ -38,6 +35,13 @@ exports.handler = async function (event, context) {
     );
 
     const data = await response.json();
+
+    if (!response.ok) {
+      return {
+        statusCode: response.status,
+        body: JSON.stringify({ error: data.message || "Notion API Error", details: data }),
+      };
+    }
 
     return {
       statusCode: 200,
