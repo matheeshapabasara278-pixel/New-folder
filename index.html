@@ -321,7 +321,6 @@
             document.getElementById('syncDot').className = "relative inline-flex rounded-full h-2 w-2 bg-yellow-400";
             document.getElementById('syncPulse').className = "animate-ping absolute inline-flex h-full w-full rounded-full bg-yellow-400 opacity-75";
 
-            // Try both standard Netlify Function endpoints
             const endpoints = ['/.netlify/functions/notion', '/api/notion'];
             let fetchedData = null;
 
@@ -353,26 +352,34 @@
             setTimeout(() => icon.classList.remove('fa-spin'), 600);
         }
 
-        // Parse Notion Properties into Clean Trade Objects
+        // Parse Notion Properties into Clean Trade Objects (Smart Session Detection)
         function parseNotionData(results) {
             trades = results.map((item, index) => {
                 const props = item.properties;
 
-                // Notion Property Mapping based on schema
                 const date = props['DATE']?.date?.start || props['Date']?.date?.start || 'N/A';
                 const pair = props['PAIR / ASSET']?.select?.name || props['Pair']?.select?.name || 'GBP/USD';
-                const session = props['SESSION & TIME']?.select?.name || props['Session']?.select?.name || 'N/A';
+                const rawSession = props['SESSION & TIME']?.select?.name || props['Session']?.select?.name || 'N/A';
                 const setup = props['ENTRY SETUP / PATTERN']?.select?.name || props['Setup']?.select?.name || 'ICT Silver Bullet';
                 const direction = props['DIRECTION']?.select?.name || props['Direction']?.select?.name || 'LONG';
                 const rr = props['PLANNED R:R']?.number || props['RR']?.number || 2.0;
                 const pnl = props['PROFIT/LOSS AMOUNT']?.number || props['PnL']?.number || 0;
                 const outcome = props['OUTCOME']?.select?.name || props['Outcome']?.select?.name || (pnl >= 0 ? 'Win' : 'Loss');
 
+                // Normalize Session string to handle typos like 'LN SILVER BULER'
+                let normalizedSession = rawSession;
+                const upperS = rawSession.toUpperCase();
+                if (upperS.includes('LN') || upperS.includes('LONDON')) {
+                    normalizedSession = 'London Session';
+                } else if (upperS.includes('NY') || upperS.includes('NEW YORK')) {
+                    normalizedSession = 'New York Session';
+                }
+
                 return {
                     id: index + 1,
                     date: date,
                     pair: pair,
-                    session: session,
+                    session: normalizedSession,
                     setup: setup,
                     direction: direction,
                     rr: `1:${rr}`,
@@ -424,7 +431,6 @@
 
         // Render Visual Charts
         function renderCharts() {
-            // 1. Equity Curve
             let cumulativePnL = 0;
             const equityLabels = ['Start'];
             const equityData = [0];
@@ -468,7 +474,6 @@
                 }
             });
 
-            // 2. Win/Loss Donut
             if (donutChartInstance) donutChartInstance.destroy();
             const ctxDonut = document.getElementById('donutChart').getContext('2d');
             const wins = trades.filter(t => t.result === 'Win').length;
@@ -492,14 +497,13 @@
                 }
             });
 
-            // 3. Session Breakdown
             if (sessionChartInstance) sessionChartInstance.destroy();
             const ctxSession = document.getElementById('sessionChart').getContext('2d');
 
-            const londonWins = trades.filter(t => t.session.toLowerCase().includes('london') && t.result === 'Win').length;
-            const londonLosses = trades.filter(t => t.session.toLowerCase().includes('london') && t.result === 'Loss').length;
-            const nyWins = trades.filter(t => (t.session.toLowerCase().includes('ny') || t.session.toLowerCase().includes('new york')) && t.result === 'Win').length;
-            const nyLosses = trades.filter(t => (t.session.toLowerCase().includes('ny') || t.session.toLowerCase().includes('new york')) && t.result === 'Loss').length;
+            const londonWins = trades.filter(t => t.session.includes('London') && t.result === 'Win').length;
+            const londonLosses = trades.filter(t => t.session.includes('London') && t.result === 'Loss').length;
+            const nyWins = trades.filter(t => t.session.includes('New York') && t.result === 'Win').length;
+            const nyLosses = trades.filter(t => t.session.includes('New York') && t.result === 'Loss').length;
 
             sessionChartInstance = new Chart(ctxSession, {
                 type: 'bar',
@@ -567,7 +571,16 @@
 
             const filtered = trades.filter(t => {
                 const matchesSearch = t.pair.toLowerCase().includes(searchVal) || t.setup.toLowerCase().includes(searchVal);
-                const matchesSession = sessionVal === 'ALL' || t.session.toLowerCase().includes(sessionVal.toLowerCase());
+                
+                let matchesSession = true;
+                if (sessionVal !== 'ALL') {
+                    if (sessionVal === 'London') {
+                        matchesSession = t.session.includes('London');
+                    } else if (sessionVal === 'NY') {
+                        matchesSession = t.session.includes('New York');
+                    }
+                }
+
                 const matchesResult = resultVal === 'ALL' || t.result === resultVal;
 
                 return matchesSearch && matchesSession && matchesResult;
