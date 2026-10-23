@@ -352,16 +352,30 @@
             setTimeout(() => icon.classList.remove('fa-spin'), 600);
         }
 
-        // Parse Notion Properties into Clean Trade Objects (Smart Session Detection)
+        // Parse Notion Properties into Clean Trade Objects (Smart Pair & Direction Extractor)
         function parseNotionData(results) {
             trades = results.map((item, index) => {
                 const props = item.properties;
 
                 const date = props['DATE']?.date?.start || props['Date']?.date?.start || 'N/A';
-                const pair = props['PAIR / ASSET']?.select?.name || props['Pair']?.select?.name || 'GBP/USD';
+                
+                // Notion 'PAIR & DIRECTION' column parsing logic
+                const pairDirectionTag = props['PAIR & DIRECTION']?.select?.name || props['PAIR / ASSET']?.select?.name || props['Pair']?.select?.name || 'GBP/USD - BUY';
+                
+                // Extract Pair (e.g., 'GBP/USD')
+                const pair = pairDirectionTag.includes('-') ? pairDirectionTag.split('-')[0].trim() : pairDirectionTag;
+
+                // Extract Direction (BUY -> LONG, SELL -> SHORT)
+                let direction = 'LONG';
+                const tagUpper = pairDirectionTag.toUpperCase();
+                if (tagUpper.includes('SELL') || tagUpper.includes('SHORT')) {
+                    direction = 'SHORT';
+                } else if (tagUpper.includes('BUY') || tagUpper.includes('LONG')) {
+                    direction = 'LONG';
+                }
+
                 const rawSession = props['SESSION & TIME']?.select?.name || props['Session']?.select?.name || 'N/A';
                 const setup = props['ENTRY SETUP / PATTERN']?.select?.name || props['Setup']?.select?.name || 'ICT Silver Bullet';
-                const direction = props['DIRECTION']?.select?.name || props['Direction']?.select?.name || 'LONG';
                 const rr = props['PLANNED R:R']?.number || props['RR']?.number || 2.0;
                 const pnl = props['PROFIT/LOSS AMOUNT']?.number || props['PnL']?.number || 0;
                 const outcome = props['OUTCOME']?.select?.name || props['Outcome']?.select?.name || (pnl >= 0 ? 'Win' : 'Loss');
